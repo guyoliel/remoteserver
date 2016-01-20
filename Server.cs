@@ -27,9 +27,7 @@ namespace RemoteServer
         public static Image ImgWinbackground = null;//Our own image with nice white flower on it
         private static bool Closing = false;        //We are shuting down so don't show any error messages 
         private static TcpListener listener = null; //Used to listen for any new client connections, maximium is 3 at the same time
-        public static Server Service1 = null;       //Servers for our 3 client connection, only one used most the time
-        private static Server Service2 = null;
-        private static Server Service3 = null;
+        public static List<Server> Services = new List<Server>();
         private static Thread THListen = null;      //Our one and only main thread used to wait for new connections
         private static bool FirstConnect = true; private static void ShowDebug(bool Debug)
         {
@@ -75,9 +73,15 @@ namespace RemoteServer
                 listener.Server.Close();
                 listener.Stop();
             }
-            if (Service1 != null && Service1.Running) Service1.Stop();
-            if (Service2 != null && Service2.Running) Service2.Stop();
-            if (Service3 != null && Service3.Running) Service3.Stop();
+            foreach (var item in Services)
+            {
+                if (item != null && item.Running)
+                {
+                    item.Stop();
+                }
+            }
+
+            //if (Services[0] != null && Service1.Running) Service1.Stop();
             if (THListen != null)
             {
                 THListen.Abort();
@@ -87,18 +91,24 @@ namespace RemoteServer
 
         public static bool IsClientsConnected()
         {
-            if (Service1 != null && Service1.Running) return true;
-            if (Service2 != null && Service1.Running) return true;
-            if (Service3 != null && Service1.Running) return true;
+            foreach (var item in Services)
+            {
+                printDebug("im in is clients", true);
+                if (item != null && item.Running)
+                {
+                    return true;
+                }
+            }
             return false;
         }
 
         private static void Listen()
-        {//Here we are waiting for new conections to come in and can deal with a moximium of 3 clients at the same time
+        {//Here we are waiting for new conections to come in
             Socket Soc = null;
             printDebug("Start listen", true);
             try
             {
+#pragma warning disable 612, 618
                 listener = new TcpListener(Settings.Port);//When microsoft is not changing code they are crashing old programs 
                 listener.Start();
                 while (THListen != null)
@@ -107,20 +117,15 @@ namespace RemoteServer
                     printDebug("Connect " + Soc.RemoteEndPoint.ToString(), true);//מאתחל את הוסקט של הסרבר
                     byte[] data = new byte[Soc.ReceiveBufferSize];
                     Soc.Receive(data);
-                    string command = Convert.ToString(data);
-
-                    if (command[0] == '#' && command[command.Length - 1] == '#')
-                    {
-                        executeCommand(command.Substring(1, command.Length - 2));
-                    }
 
                     string Msg = Settings.ScreenServerX + " " + Settings.ScreenServerY + " " + Screen.PrimaryScreen.Bounds.Width + " " + Screen.PrimaryScreen.Bounds.Height + " " + FirstConnect.ToString();
                     FirstConnect = false;
                     byte[] BMsg = ASCIIEncoding.ASCII.GetBytes(Msg);
                     Soc.Send(BMsg, BMsg.Length, SocketFlags.None);
-                    if (Service1 == null || !Service1.Running) { Service1 = new Server(); Service1.Start(Settings.Port, Soc, Settings.ScreenServerX, Settings.ScreenServerY); }
-                    else if (Service2 == null || !Service2.Running) { Service2 = new Server(); Service2.Start(Settings.Port, Soc, Settings.ScreenServerX, Settings.ScreenServerY); }
-                    else if (Service3 == null || !Service3.Running) { Service3 = new Server(); Service3.Start(Settings.Port, Soc, Settings.ScreenServerX, Settings.ScreenServerY); }
+
+                    Services.Add(new Server());
+                    Services[Services.Count - 1].Start(Settings.Port, Soc, Settings.ScreenServerX, Settings.ScreenServerY);
+
                 }
                 listener.Stop();
             }
